@@ -21,52 +21,50 @@ dir="reference"
 # Set the reference fasta
 #ref=human_g1k_v37.fasta
 #phase2 reference
-ref= "hg19.fa"
-mills= "Mills_and_1000G_gold_standard.indels.hg19.sites.vcf"
-phase1_indels= "1000G_phase1.indels.hg19.sites.vcf"
-dbsnp= "dbsnp_138.hg19.vcf"
+ref="hg19.fa"
+mills="Mills_and_1000G_gold_standard.indels.hg19.sites.vcf"
+phase1_indels="1000G_phase1.indels.hg19.sites.vcf"
+dbsnp="dbsnp_138.hg19.vcf"
 #choose how to log time
 Time=/usr/bin/time
 
 # Create Variable for input file
 INPUT=$1
+# Root input name
+RINPUT=${INPUT%.*}
 
 # sort sample
-#samtools sort -@ 10 ${dir}/$INPUT ${dir}/${INPUT%.*}.sorted
-
-INPUT1=${INPUT%.*}.sorted.bam
-
-echo $INPUT1
+samtools sort -@ $THREADS $INPUT $RINPUT.sorted
 
 # index bam file
-samtools index $INPUT1
+samtools index $RINPUT.sorted
 
 #START PIPELINE
 # calculate flag stats using samtools
 $Time samtools flagstat \
-    $INPUT1 \
+    $RINPUT.sorted.bam \
     > flagstat.report 2>&1
 
 # sort reads in picard
 $Time java $RAM \
     -jar ~/picard/picard.jar \
     SortSam \
-    INPUT=$INPUT1 \
-    OUTPUT=$INPUT1.sorted.bam \
+    INPUT=$RINPUT.sorted.bam \
+    OUTPUT=$RINPUT.picardSorted.bam \
     SORT_ORDER=coordinate \
     > sortReads.report 2>&1
-rm -r $INPUT1
 
 # mark duplicates reads in picard
 $Time java $RAM \
     -jar ~/picard/picard.jar \
     MarkDuplicates \
-    INPUT=$INPUT1.sorted.bam \
-    OUTPUT=$INPUT1.mkdups.bam \
+    INPUT=$RINPUT.picardSorted.bam \
+    OUTPUT=$RINPUT.mkdups.bam \
     METRICS_FILE=metrics.txt \
     ASSUME_SORTED=true \
     > markDups.report 2>&1
-rm -r $INPUT1.sorted.bam
+
+rm -r $RINPUT.picardSorted.bam
 
 # GATK Indel Realignment
 # There are 2 steps to the realignment process
@@ -87,7 +85,7 @@ rm -r $INPUT1.sorted.bam
 
 
 # Index the markdups.bam for realignment
-$Time samtools index $INPUT1.mkdups.bam
+$Time samtools index $RINPUT.mkdups.bam
 
 #Here Next
 # create target indels (find areas likely in need of realignment)
@@ -97,7 +95,7 @@ $Time java $RAM \
     -known ${dir}/$mills \
     -known ${dir}/$phase1_indels \
     -R ${dir}/${ref} \
-    -I $INPUT1.mkdups.bam \
+    -I $RINPUT.mkdups.bam \
     -o ${dir}/target_intervals.list \
     -nt $THREADS \
     > targetIndels.report 2>&1
@@ -110,10 +108,11 @@ $Time java $RAM \
     -known ${dir}/$phase1_indels \
     -R ${dir}/${ref} \
     -targetIntervals ${dir}/target_intervals.list \
-    -I $INPUT1.mkdups.bam \
-    -o $INPUT1.realigned.bam \
+    -I $RINPUT.mkdups.bam \
+    -o $RINPUT.realigned.bam \
     > realignIndels.report 2>&1
-rm -r $INPUT1.mkdups.bam
+
+rm -r $RINPUT.mkdups.bam
 
 # GATK BQSR
 
@@ -122,8 +121,8 @@ $Time java $RAM \
     -jar ~/GenomeAnalysisTK.jar \
     -T BaseRecalibrator \
     -R ${dir}/${ref} \
-    -I $INPUT1.realigned.bam \
-    -knownSites ${dir}/dbsnp \
+    -I $RINPUT.realigned.bam \
+    -knownSites ${dir}/$dbsnp \
     -knownSites ${dir}/$mills \
     -knownSites ${dir}/$phase1_indels \
     -o ${dir}/recal_data.table \
@@ -135,10 +134,10 @@ $Time java $RAM \
     -jar ~/GenomeAnalysisTK.jar \
     -T PrintReads \
     -R ${dir}/${ref} \
-    -I $INPUT1.realigned.bam \
+    -I $RINPUT.realigned.bam \
     -BQSR ${dir}/recal_data.table \
-    -o $INPUT1.bqsr.bam \
+    -o $RINPUT.bqsr.bam \
     -nct $THREADS \
     > bqsr.report 2>&1
 
-echo "This is the body" | mail -s "Preprocessing is done" $2
+echo "This is the body" | mail -s "Preprocessing is done for $INPUT" $2
