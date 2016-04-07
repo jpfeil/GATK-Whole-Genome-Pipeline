@@ -3,15 +3,13 @@ set -e
 set -x 
 set -o pipefail
 
-cd /data
-
 #get reference genome
-wget ftp://gsapubftp-anonymous@ftp.broadinstitute.org/bundle/2.5/b37/human_g1k_v37.fasta.gz
-wget ftp://gsapubftp-anonymous@ftp.broadinstitute.org/bundle/2.5/b37/human_g1k_v37.fasta.fai.gz
-wget ftp://gsapubftp-anonymous@ftp.broadinstitute.org/bundle/2.5/b37/human_g1k_v37.dict.gz
-gunzip human_g1k_v37.fasta
-gunzip human_g1k_v37.fasta.fai 
-gunzip human_g1k_v37.dict.gz
+#wget ftp://gsapubftp-anonymous@ftp.broadinstitute.org/bundle/2.8/hg19/ucsc.hg19.fasta.gz
+#wget ftp://gsapubftp-anonymous@ftp.broadinstitute.org/bundle/2.8/hg19/ucsc.hg19.fasta.fai.gz
+#wget ftp://gsapubftp-anonymous@ftp.broadinstitute.org/bundle/2.8/hg19/ucsc.hg19.dict.gz
+#gunzip ucsc.hg19.fasta.gz
+#gunzip ucsc.hg19.fasta.fai.gz 
+#gunzip ucsc.hg19.dict.gz
 
 #phase2 reference
 #wget ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/technical/reference/phase2_reference_assembly_sequence/hs37d5.fa.gz
@@ -19,20 +17,20 @@ gunzip human_g1k_v37.dict.gz
 #samtools faidx hs37d5.fa
 
 # VCF files for VariantRecalibrator_INDEL.RealignerTargetCreator knowns, and dbsnp for BaseRecalibraton
-wget ftp://gsapubftp-anonymous@ftp.broadinstitute.org/bundle/2.5/b37/Mills_and_1000G_gold_standard.indels.b37.vcf.gz
-wget ftp://gsapubftp-anonymous@ftp.broadinstitute.org/bundle/2.5/b37/1000G_phase1.indels.b37.vcf.gz
-wget ftp://gsapubftp-anonymous@ftp.broadinstitute.org/bundle/2.5/b37/dbsnp_137.b37.vcf.gz
-gunzip Mills_and_1000G_gold_standard.indels.b37.vcf.gz
-gunzip 1000G_phase1.indels.b37.vcf.gz
-gunzip dbsnp_137.b37.vcf.gz
+wget ftp://gsapubftp-anonymous@ftp.broadinstitute.org/bundle/2.8/hg19/Mills_and_1000G_gold_standard.indels.hg19.sites.vcf.gz
+wget ftp://gsapubftp-anonymous@ftp.broadinstitute.org/bundle/2.8/hg19/1000G_phase1.indels.hg19.sites.vcf.gz
+wget ftp://gsapubftp-anonymous@ftp.broadinstitute.org/bundle/2.8/hg19/dbsnp_138.hg19.vcf.gz
+gunzip Mills_and_1000G_gold_standard.indels.hg19.sites.vcf.gz
+gunzip 1000G_phase1.indels.hg19.sites.vcf.gz
+gunzip dbsnp_138.hg19.vcf.gz
 
 #Resource files for VariantRecalibrator_SNP
-wget ftp://gsapubftp-anonymous@ftp.broadinstitute.org/bundle/2.5/b37/hapmap_3.3.b37.vcf.gz
-wget ftp://gsapubftp-anonymous@ftp.broadinstitute.org/bundle/2.5/b37/1000G_omni2.5.b37.vcf.gz
-wget ftp://gsapubftp-anonymous@ftp.broadinstitute.org/bundle/2.5/b37/1000G_phase1.snps.high_confidence.b37.vcf.gz
-gunzip hapmap_3.3.b37.vcf.gz
-gunzip 1000G_omni2.5.b37.vcf.gz
-gunzip 1000G_phase1.snps.high_confidence.b37.vcf.gz
+wget ftp://gsapubftp-anonymous@ftp.broadinstitute.org/bundle/2.8/hg19/hapmap_3.3.hg19.sites.vcf.gz
+wget ftp://gsapubftp-anonymous@ftp.broadinstitute.org/bundle/2.8/hg19/1000G_omni2.5.hg19.sites.vcf.gz
+wget ftp://gsapubftp-anonymous@ftp.broadinstitute.org/bundle/2.8/hg19/1000G_phase1.snps.high_confidence.hg19.sites.vcf.gz
+gunzip hapmap_3.3.hg19.sites.vcf.gz
+gunzip 1000G_omni2.5.hg19.sites.vcf.gz
+gunzip 1000G_phase1.snps.high_confidence.hg19.sites.vcf.gz
 
 
 cd ~
