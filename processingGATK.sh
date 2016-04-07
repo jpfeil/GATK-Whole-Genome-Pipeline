@@ -1,4 +1,4 @@
-#! /bin/bash
+#!/bin/bash
 
 # This script was created to run the GATK germline variant calling best pratices pipeline.
 # The pipeline takes unprocessed bam file(s) as input and outputs the biological genomic variance
@@ -12,63 +12,61 @@ set -e
 set -x
 set -o pipefail
 
-cd ~
-
 # Set $RAM to use for all java processes
 RAM=-Xmx200g
 # Set number of threads to the number of cores/machine for speed optimization
 THREADS=32
-# Set the dir for the reference files and input bam
-dir=/data
+# Set the dir for the reference files
+dir="reference"
 # Set the reference fasta
 #ref=human_g1k_v37.fasta
 #phase2 reference
-ref=hs37d5.fa
+ref= "hg19.fa"
+mills= "Mills_and_1000G_gold_standard.indels.hg19.sites.vcf"
+phase1_indels= "1000G_phase1.indels.hg19.sites.vcf"
+dbsnp= "dbsnp_138.hg19.vcf"
 #choose how to log time
 Time=/usr/bin/time
 
-cd ${dir}
-# get input bam file
-s3cmd get s3://bd2k-test-data/NA12878.mapped.ILLUMINA.bwa.CEU.high_coverage_pcr_free.20130906.bam
-
-#NA12878 chr20 bam
-#wget ftp://ftp-trace.ncbi.nih.gov/1000genomes/ftp/data/NA12878/alignment/NA12878.chrom20.ILLUMINA.bwa.CEU.low_coverage.20121211.bam
-
 # Create Variable for input file
-INPUT1=NA12878.mapped.ILLUMINA.bwa.CEU.high_coverage_pcr_free.20130906.bam
-#INPUT1=NA12878.chrom20.ILLUMINA.bwa.CEU.low_coverage.20121211.bam
+INPUT=$1
+
+# sort sample
+#samtools sort -@ 10 ${dir}/$INPUT ${dir}/${INPUT%.*}.sorted
+
+INPUT1=${INPUT%.*}.sorted.bam
+
+echo $INPUT1
 
 # index bam file
-samtools index ${dir}/$INPUT1
-
-cd ~
+samtools index $INPUT1
 
 #START PIPELINE
 # calculate flag stats using samtools
 $Time samtools flagstat \
-    ${dir}/$INPUT1 \
+    $INPUT1 \
     > flagstat.report 2>&1
 
 # sort reads in picard
 $Time java $RAM \
     -jar ~/picard/picard.jar \
     SortSam \
-    INPUT=${dir}/$INPUT1 \
-    OUTPUT=${dir}/$INPUT1.sorted.bam \
+    INPUT=$INPUT1 \
+    OUTPUT=$INPUT1.sorted.bam \
     SORT_ORDER=coordinate \
     > sortReads.report 2>&1
-rm -r ${dir}/$INPUT1
+rm -r $INPUT1
 
 # mark duplicates reads in picard
 $Time java $RAM \
     -jar ~/picard/picard.jar \
     MarkDuplicates \
-    INPUT=${dir}/$INPUT1.sorted.bam \
-    OUTPUT=${dir}/$INPUT1.mkdups.bam \
+    INPUT=$INPUT1.sorted.bam \
+    OUTPUT=$INPUT1.mkdups.bam \
     METRICS_FILE=metrics.txt \
     ASSUME_SORTED=true \
     > markDups.report 2>&1
-rm -r ${dir}/$INPUT1.sorted.bam
+rm -r $INPUT1.sorted.bam
 
 # GATK Indel Realignment
 # There are 2 steps to the realignment process
@@ -81,27 +79,25 @@ rm -r ${dir}/$INPUT1.sorted.bam
 # create sequence dictionary for reference genome
 # We could skip this step. I've download the b37.dict
 
-$Time java $RAM \
-    -jar ~/picard/picard.jar \
-    CreateSequenceDictionary \
-    REFERENCE=${dir}/${ref} \
-    OUTPUT=${dir}/hs37d5.dict
-    #OUTPUT=${dir}/human_g1k_v37.dict
-
+#$Time java $RAM \
+#    -jar ~/picard/picard.jar \
+#    CreateSequenceDictionary \
+#    REFERENCE=${dir}/${ref} \
+#    OUTPUT=${dir}/$i{ref%.*}.dict
 
 
 # Index the markdups.bam for realignment
-$Time samtools index ${dir}/$INPUT1.mkdups.bam
+$Time samtools index $INPUT1.mkdups.bam
 
 #Here Next
 # create target indels (find areas likely in need of realignment)
 $Time java $RAM \
     -jar ~/GenomeAnalysisTK.jar \
     -T RealignerTargetCreator \
-    -known ${dir}/Mills_and_1000G_gold_standard.indels.b37.vcf \
-    -known ${dir}/1000G_phase1.indels.b37.vcf \
+    -known ${dir}/$mills \
+    -known ${dir}/$phase1_indels \
     -R ${dir}/${ref} \
-    -I ${dir}/$INPUT1.mkdups.bam \
+    -I $INPUT1.mkdups.bam \
     -o ${dir}/target_intervals.list \
     -nt $THREADS \
     > targetIndels.report 2>&1
@@ -110,14 +106,14 @@ $Time java $RAM \
 $Time java $RAM \
     -jar ~/GenomeAnalysisTK.jar \
     -T IndelRealigner \
-    -known ${dir}/Mills_and_1000G_gold_standard.indels.b37.vcf \
-    -known ${dir}/1000G_phase1.indels.b37.vcf \
+    -known ${dir}/$mills \
+    -known ${dir}/$phase1_indels \
     -R ${dir}/${ref} \
     -targetIntervals ${dir}/target_intervals.list \
-    -I ${dir}/$INPUT1.mkdups.bam \
-    -o ${dir}/$INPUT1.realigned.bam \
+    -I $INPUT1.mkdups.bam \
+    -o $INPUT1.realigned.bam \
     > realignIndels.report 2>&1
-rm -r ${dir}/$INPUT1.mkdups.bam
+rm -r $INPUT1.mkdups.bam
 
 # GATK BQSR
 
@@ -126,10 +122,10 @@ $Time java $RAM \
     -jar ~/GenomeAnalysisTK.jar \
     -T BaseRecalibrator \
     -R ${dir}/${ref} \
-    -I ${dir}/$INPUT1.realigned.bam \
-    -knownSites ${dir}/dbsnp_137.b37.vcf \
-    -knownSites ${dir}/Mills_and_1000G_gold_standard.indels.b37.vcf \
-    -knownSites ${dir}/1000G_phase1.indels.b37.vcf \
+    -I $INPUT1.realigned.bam \
+    -knownSites ${dir}/dbsnp \
+    -knownSites ${dir}/$mills \
+    -knownSites ${dir}/$phase1_indels \
     -o ${dir}/recal_data.table \
     -nct $THREADS \
     > recalibrationTable.report 2>&1
@@ -139,8 +135,10 @@ $Time java $RAM \
     -jar ~/GenomeAnalysisTK.jar \
     -T PrintReads \
     -R ${dir}/${ref} \
-    -I ${dir}/$INPUT1.realigned.bam \
+    -I $INPUT1.realigned.bam \
     -BQSR ${dir}/recal_data.table \
-    -o ${dir}/$INPUT1.bqsr.bam \
+    -o $INPUT1.bqsr.bam \
     -nct $THREADS \
     > bqsr.report 2>&1
+
+echo "This is the body" | mail -s "Preprocessing is done" $2
